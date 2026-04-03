@@ -15,24 +15,29 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
 import com.example.test_flashcard.data.Deck
 import com.example.test_flashcrard.ui.theme.practice.AddCardDialog
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(
     decks: List<Deck>,
     onDeckClick: (Int) -> Unit,
     onAddCard: (String, String, Int) -> Unit,
-    onAddDeck: (String, String) -> Unit
+    onAddDeck: (String, String) -> Unit,
+    onResetDeck: (Int) -> Unit
 ) {
     var showCardDialog by remember { mutableStateOf(false) }
     var showDeckDialog by remember { mutableStateOf(false) }
+
+    var showResetDialog by remember { mutableStateOf(false) }
+    var deckIdToReset by remember { mutableIntStateOf(-1) }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Dashboard") },
                 actions = {
-                    // Nút thêm bộ bài mới (Folder +) ở góc trên
                     IconButton(onClick = { showDeckDialog = true }) {
                         Icon(Icons.Default.CreateNewFolder, contentDescription = "Thêm bộ bài")
                     }
@@ -40,7 +45,6 @@ fun DashboardScreen(
             )
         },
         floatingActionButton = {
-            // Nút thêm thẻ mới ở dưới
             FloatingActionButton(onClick = { if (decks.isNotEmpty()) showCardDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Thêm thẻ")
             }
@@ -64,18 +68,21 @@ fun DashboardScreen(
                     items(decks) { deck ->
                         Card(
                             modifier = Modifier
-                                .fillMaxWidth()
+                                .fillMaxWidth() // Thêm cái này cho Card dài ra
                                 .padding(vertical = 8.dp)
-                                .clickable { onDeckClick(deck.id) },
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            )
+                                .combinedClickable( // 3. Sửa lỗi dư dấu ngoặc ở đây
+                                    onClick = { onDeckClick(deck.id) },
+                                    onLongClick = {
+                                        deckIdToReset = deck.id
+                                        showResetDialog = true
+                                    }
+                                ),
+                            elevation = CardDefaults.cardElevation(4.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
                                 Text(text = deck.name, style = MaterialTheme.typography.titleLarge)
                                 Text(text = deck.category, style = MaterialTheme.typography.bodyMedium)
 
-                                // Thanh tiến trình giả lập
                                 Spacer(modifier = Modifier.height(12.dp))
                                 LinearProgressIndicator(
                                     progress = { 0.4f },
@@ -88,6 +95,23 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+
+        if (showResetDialog) {
+            AlertDialog(
+                onDismissRequest = { showResetDialog = false },
+                title = { Text("Học lại từ đầu?") },
+                text = { Text("Bạn có muốn xóa toàn bộ tiến độ của bộ bài này không?") },
+                confirmButton = {
+                    Button(onClick = {
+                        onResetDeck(deckIdToReset)
+                        showResetDialog = false
+                    }) { Text("Xác nhận") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showResetDialog = false }) { Text("Hủy") }
+                }
+            )
         }
 
         // Dialog thêm bộ bài

@@ -15,7 +15,6 @@ import kotlinx.coroutines.launch
 
 class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel() {
 
-    // 1. Lấy danh sách bộ bài hiển thị lên Dashboard
     val allDecks: StateFlow<List<Deck>> = repository.getAllDecks()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
@@ -32,11 +31,9 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
         viewModelScope.launch {
             val existingDecks = repository.getAllDecks().first()
             if (existingDecks.isEmpty()) {
-                // 1. Tạo các Mục (Bộ bài) trước
                 repository.insertDeck(Deck(name = "Earth Science", category = "Science & Environment"))
                 repository.insertDeck(Deck(name = "Art", category = "Arts"))
 
-                // 2. Đợi một chút để lấy ID vừa tạo và nạp thẻ mẫu vào
                 val newDecks = repository.getAllDecks().first()
                 if (newDecks.isNotEmpty()) {
                     repository.insertCard(Flashcard(deckId = newDecks[0].id, frontText = "Core", backText = "Lõi Trái Đất"))
@@ -45,7 +42,7 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
         }
     }
 
-    // 2. Hàm được gọi khi user bấm "Học" một bộ bài bất kỳ
+
     fun startPractice(deckId: Int) {
         viewModelScope.launch {
             val cards = repository.getCardsToReview(deckId).first()
@@ -59,6 +56,11 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
         viewModelScope.launch {
             val updatedCard = SpacedRepetitionAlgorithm.calculateNextReview(card, quality)
             repository.updateCard(updatedCard)
+
+            if (quality == 0) {
+                reviewQueue.add(updatedCard)
+            }
+
             _currentCard.value = reviewQueue.removeFirstOrNull()
         }
     }
@@ -77,6 +79,12 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
     fun addNewDeck(name: String, category: String) {
         viewModelScope.launch {
             repository.insertDeck(Deck(name = name, category = category))
+        }
+    }
+
+    fun resetAllCardsInDeck(deckId: Int) {
+        viewModelScope.launch {
+            repository.resetDeckProgress(deckId)
         }
     }
 }

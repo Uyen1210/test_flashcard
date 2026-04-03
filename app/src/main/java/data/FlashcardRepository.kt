@@ -24,4 +24,8 @@ class FlashcardRepository(private val flashcardDao: FlashcardDao) {
         flashcardDao.insertDeck(deck)
     }
 
+    suspend fun resetDeckProgress(deckId: Int) {
+        flashcardDao.resetDeckProgress(deckId)
+    }
+
 }
