@@ -2,30 +2,25 @@ package com.example.test_flashcard.data
 
 import kotlinx.coroutines.flow.Flow
 
-class FlashcardRepository(private val flashcardDao: FlashcardDao) {
-    fun getCardsToReview(deckId: Int): Flow<List<Flashcard>> {
-        val currentTime = System.currentTimeMillis()
-        return flashcardDao.getCardsToReview(deckId, currentTime)
-    }
+class FlashcardRepository(
+    private val flashcardDao: FlashcardDao,
+    private val deckDao: DeckDao,
+    private val studyLogDao: StudyLogDao
+) {
+    fun getAllDecks() = deckDao.getAllDecks()
 
-    suspend fun updateCard(card: Flashcard) {
-        flashcardDao.updateFlashcard(card)
-    }
+    suspend fun insertCard(card: Flashcard) = flashcardDao.insertCard(card)
+    suspend fun updateCard(card: Flashcard) = flashcardDao.updateCard(card)
 
-    // THÊM HÀM NÀY ĐỂ TẠO THẺ MỚI
-    suspend fun insertCard(card: Flashcard) {
-        flashcardDao.insertFlashcard(card)
-    }
-    fun getAllDecks(): Flow<List<Deck>> {
-        return flashcardDao.getAllDecks()
-    }
+    fun getTotalCount(deckId: Int): Flow<Int> = flashcardDao.getTotalCount(deckId)
+    fun getLearnedCount(deckId: Int): Flow<Int> = flashcardDao.getLearnedCount(deckId)
 
-    suspend fun insertDeck(deck: Deck) {
-        flashcardDao.insertDeck(deck)
-    }
+    suspend fun resetDeckProgress(deckId: Int) = flashcardDao.resetDeckProgress(deckId)
 
-    suspend fun resetDeckProgress(deckId: Int) {
-        flashcardDao.resetDeckProgress(deckId)
-    }
+    suspend fun insertDeck(deck: Deck) = deckDao.insertDeck(deck)
 
+    suspend fun insertLog(log: StudyLog) = studyLogDao.insertLog(log)
+    fun getAllLogs(): Flow<List<StudyLog>> = studyLogDao.getAllLogs()
+    fun getUniqueStudyDays(): Flow<List<Long>> = studyLogDao.getUniqueStudyDays()
+    fun getCardsByDeck(deckId: Int): Flow<List<Flashcard>> = flashcardDao.getCardsByDeck(deckId)
 }

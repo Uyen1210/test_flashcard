@@ -5,6 +5,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -19,7 +21,7 @@ import androidx.compose.ui.unit.dp
 fun FlashcardItem(
     frontText: String,
     backText: String,
-    onSpeak: () -> Unit // Thêm hàm phát âm vào đây
+    onSpeak: () -> Unit
 ) {
     var rotated by remember { mutableStateOf(false) }
     val rotation by animateFloatAsState(
@@ -47,7 +49,6 @@ fun FlashcardItem(
             contentAlignment = Alignment.Center
         ) {
             if (isBack) {
-                // MẶT SAU: Có chữ và nút Loa
                 Column(
                     modifier = Modifier
                         .graphicsLayer { rotationY = 180f }
@@ -89,42 +90,83 @@ fun FlashcardItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PracticeScreen(
     frontText: String,
     backText: String,
     onAnswerSelected: (Int) -> Unit,
-    onSpeak: () -> Unit
+    onSpeak: () -> Unit,
+    onExit: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        // Gọi FlashcardItem và truyền hàm onSpeak vào
-        FlashcardItem(frontText = frontText, backText = backText, onSpeak = onSpeak)
+    var isPaused by remember { mutableStateOf(false) }
 
-        Spacer(modifier = Modifier.height(40.dp))
-
-        Text(text = "Mức độ ghi nhớ của bạn?", style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Đang học...") },
+                navigationIcon = {
+                    IconButton(onClick = onExit) {
+                        Icon(Icons.Default.Close, contentDescription = "Hủy")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { isPaused = true }) {
+                        Icon(Icons.Default.Pause, contentDescription = "Tạm dừng")
+                    }
+                }
+            )
+        }
+    ) { padding ->
+        // TẤT CẢ NỘI DUNG PHẢI NẰM TRONG BOX/COLUMN NÀY
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding) // Quan trọng: Để không bị TopBar đè lên
+                .padding(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
-            Button(onClick = { onAnswerSelected(0) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFE57373))) {
-                Text("Quên")
+            // Hiển thị thẻ lật
+            FlashcardItem(frontText = frontText, backText = backText, onSpeak = onSpeak)
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(text = "Mức độ ghi nhớ của bạn?", style = MaterialTheme.typography.titleMedium)
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Các nút đánh giá SRS
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                val buttonColors = listOf(Color(0xFFE57373), Color(0xFFFFB74D), Color(0xFF64B5F6), Color(0xFF81C784))
+                val labels = listOf("Quên", "Khó", "Vừa", "Dễ")
+
+                labels.forEachIndexed { index, label ->
+                    Button(
+                        onClick = { onAnswerSelected(index) },
+                        colors = ButtonDefaults.buttonColors(containerColor = buttonColors[index])
+                    ) {
+                        Text(label)
+                    }
+                }
             }
-            Button(onClick = { onAnswerSelected(1) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFFB74D))) {
-                Text("Khó")
-            }
-            Button(onClick = { onAnswerSelected(2) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF64B5F6))) {
-                Text("Vừa")
-            }
-            Button(onClick = { onAnswerSelected(3) }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF81C784))) {
-                Text("Dễ")
-            }
+        }
+
+        // Dialog hiện lên khi bấm Tạm dừng
+        if (isPaused) {
+            AlertDialog(
+                onDismissRequest = { isPaused = false },
+                title = { Text("Đã tạm dừng") },
+                text = { Text("Nghỉ tay một chút rồi quay lại học tiếp nhé!") },
+                confirmButton = {
+                    Button(onClick = { isPaused = false }) { Text("Tiếp tục học") }
+                },
+                dismissButton = {
+                    TextButton(onClick = onExit) { Text("Thoát phiên") }
+                }
+            )
         }
     }
 }

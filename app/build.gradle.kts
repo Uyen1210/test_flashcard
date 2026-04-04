@@ -43,13 +43,12 @@ android {
 }
 
 dependencies {
-    val roomVersion = "2.6.1" // Đổi tên biến bỏ dấu gạch dướ
+    val roomVersion = "2.6.1"
     implementation("androidx.room:room-runtime:$roomVersion")
     implementation("androidx.room:room-ktx:$roomVersion")
-    // Sửa chữ "kapt" ở dòng dưới này thành "ksp"
     add("ksp", "androidx.room:room-compiler:$roomVersion")
 
-    // 2. ViewModel & Lifecycle dành riêng cho Jetpack Compose
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.compose.material:material-icons-extended")

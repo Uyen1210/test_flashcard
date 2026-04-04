@@ -1,6 +1,7 @@
 package com.example.test_flashcard.ui.theme.practice
 
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -13,23 +14,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.unit.dp
-import com.example.test_flashcard.data.Deck
-import com.example.test_flashcrard.ui.theme.practice.AddCardDialog
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import com.example.test_flashcard.data.DeckWithProgress
+import com.example.test_flashcard.ui.theme.practice.AddCardDialog
+import kotlin.collections.isNotEmpty
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(
-    decks: List<Deck>,
+    decks: List<DeckWithProgress>,
     onDeckClick: (Int) -> Unit,
     onAddCard: (String, String, Int) -> Unit,
     onAddDeck: (String, String) -> Unit,
-    onResetDeck: (Int) -> Unit
+    onResetDeck: (Int) -> Unit,
+    onImportClick: (Int) -> Unit
 ) {
     var showCardDialog by remember { mutableStateOf(false) }
     var showDeckDialog by remember { mutableStateOf(false) }
-
     var showResetDialog by remember { mutableStateOf(false) }
     var deckIdToReset by remember { mutableIntStateOf(-1) }
 
@@ -65,14 +65,17 @@ fun DashboardScreen(
                 }
             } else {
                 LazyColumn {
-                    items(decks) { deck ->
+                    items(decks) { item ->
+                        val deck = item.deck
+
                         Card(
                             modifier = Modifier
-                                .fillMaxWidth() // Thêm cái này cho Card dài ra
+                                .fillMaxWidth()
                                 .padding(vertical = 8.dp)
-                                .combinedClickable( // 3. Sửa lỗi dư dấu ngoặc ở đây
+                                .combinedClickable(
                                     onClick = { onDeckClick(deck.id) },
                                     onLongClick = {
+                                        // FIX 1: Kích hoạt logic Reset khi nhấn giữ
                                         deckIdToReset = deck.id
                                         showResetDialog = true
                                     }
@@ -80,16 +83,40 @@ fun DashboardScreen(
                             elevation = CardDefaults.cardElevation(4.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                Text(text = deck.name, style = MaterialTheme.typography.titleLarge)
-                                Text(text = deck.category, style = MaterialTheme.typography.bodyMedium)
+                                // Dùng Row để đẩy nút Import sang bên phải
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(text = deck.name, style = MaterialTheme.typography.titleLarge)
+                                        Text(text = deck.category, style = MaterialTheme.typography.bodyMedium)
+                                    }
+
+                                    // FIX 2: Thêm nút Import CSV vào từng Card
+                                    OutlinedButton(
+                                        onClick = { onImportClick(deck.id) },
+                                        contentPadding = PaddingValues(horizontal = 8.dp)
+                                    ) {
+                                        Text("Import CSV", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
 
                                 Spacer(modifier = Modifier.height(12.dp))
+
                                 LinearProgressIndicator(
-                                    progress = { 0.4f },
+                                    progress = { item.progress },
                                     modifier = Modifier.fillMaxWidth().height(8.dp),
                                     strokeCap = StrokeCap.Round
                                 )
-                                Text(text = "Tiến độ: 40%", style = MaterialTheme.typography.labelSmall)
+
+                                Spacer(modifier = Modifier.height(4.dp))
+
+                                Text(
+                                    text = "Tiến độ: ${item.progressText}",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
                             }
                         }
                     }
@@ -97,6 +124,7 @@ fun DashboardScreen(
             }
         }
 
+        // --- CÁC DIALOG XỬ LÝ ---
         if (showResetDialog) {
             AlertDialog(
                 onDismissRequest = { showResetDialog = false },
@@ -114,7 +142,6 @@ fun DashboardScreen(
             )
         }
 
-        // Dialog thêm bộ bài
         if (showDeckDialog) {
             AddDeckDialog(
                 onDismiss = { showDeckDialog = false },
@@ -125,7 +152,6 @@ fun DashboardScreen(
             )
         }
 
-        // Dialog thêm thẻ
         if (showCardDialog) {
             AddCardDialog(
                 decks = decks,

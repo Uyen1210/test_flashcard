@@ -1,23 +1,23 @@
-package com.example.test_flashcrard.ui.theme.practice
+package com.example.test_flashcard.ui.theme.practice
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.test_flashcard.data.Deck
+import com.example.test_flashcard.data.DeckWithProgress
 
 @Composable
 fun AddCardDialog(
-    decks: List<Deck>, // Truyền danh sách bộ bài vào để chọn
+    decks: List<DeckWithProgress>,
     onDismiss: () -> Unit,
-    onConfirm: (String, String, Int) -> Unit // Trả về thêm deckId của bộ bài được chọn
+    onConfirm: (String, String, Int) -> Unit
 ) {
     var frontText by remember { mutableStateOf("") }
     var backText by remember { mutableStateOf("") }
 
-    // Trạng thái quản lý việc đóng/mở menu và bộ bài được chọn
     var expanded by remember { mutableStateOf(false) }
+    // selectedDeck bây giờ là một đối tượng DeckWithProgress
     var selectedDeck by remember { mutableStateOf(decks.firstOrNull()) }
 
     AlertDialog(
@@ -25,24 +25,24 @@ fun AddCardDialog(
         title = { Text("Thêm thẻ mới") },
         text = {
             Column {
-                // Phần chọn Bộ bài (Mục)
                 Text("Thêm vào mục:", style = MaterialTheme.typography.labelMedium)
                 Box(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                     OutlinedButton(
                         onClick = { expanded = true },
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(selectedDeck?.name ?: "Chọn bộ bài")
+                        Text(selectedDeck?.deck?.name ?: "Chọn bộ bài")
                     }
                     DropdownMenu(
                         expanded = expanded,
                         onDismissRequest = { expanded = false }
                     ) {
-                        decks.forEach { deck ->
+                        decks.forEach { item ->
                             DropdownMenuItem(
-                                text = { Text(deck.name) },
+                                // FIX: Truy cập vào item.deck.name
+                                text = { Text(item.deck.name) },
                                 onClick = {
-                                    selectedDeck = deck
+                                    selectedDeck = item
                                     expanded = false
                                 }
                             )
@@ -70,8 +70,7 @@ fun AddCardDialog(
         confirmButton = {
             Button(onClick = {
                 if (frontText.isNotBlank() && backText.isNotBlank() && selectedDeck != null) {
-                    // Trả về dữ liệu kèm theo ID của bộ bài đã chọn[cite: 1]
-                    onConfirm(frontText, backText, selectedDeck!!.id)
+                    onConfirm(frontText, backText, selectedDeck!!.deck.id)
                 }
             }) {
                 Text("Lưu")

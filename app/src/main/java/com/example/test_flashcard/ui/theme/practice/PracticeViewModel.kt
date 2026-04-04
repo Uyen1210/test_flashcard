@@ -1,22 +1,41 @@
 package com.example.test_flashcard.ui.theme.practice
 
+import android.content.ContentResolver
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.test_flashcard.data.Deck
-import com.example.test_flashcard.data.Flashcard
-import com.example.test_flashcard.data.FlashcardRepository
+import com.example.test_flashcard.data.*
 import com.example.test_flashcard.domain.SpacedRepetitionAlgorithm
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
+@OptIn(ExperimentalCoroutinesApi::class) // Cần dòng này cho flatMapLatest
 class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel() {
 
-    val allDecks: StateFlow<List<Deck>> = repository.getAllDecks()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    // 1. Danh sách bộ bài kèm tiến độ (Dùng Flow để cập nhật thời gian thực)
+    val decksWithProgress: Flow<List<DeckWithProgress>> = repository.getAllDecks().flatMapLatest { decks ->
+        if (decks.isEmpty()) {
+            flowOf(emptyList())
+        } else {
+            val flowList = decks.map { deck ->
+                combine(
+                    repository.getTotalCount(deck.id),
+                    repository.getLearnedCount(deck.id)
+                ) { total, learned ->
+                    DeckWithProgress(deck, total, learned)
+                }
+            }
+            combine(flowList) { it.toList() }
+        }
+    }
+
+    // 2. Quản lý Streak (Số ngày học liên tiếp)
+    val streakCount: StateFlow<Int> = repository.getUniqueStudyDays()
+        .map { calculateStreak(it) }
+        .stateIn(viewModelScope, SharingStarted.Lazily, 0)
 
     private val _currentCard = MutableStateFlow<Flashcard?>(null)
     val currentCard: StateFlow<Flashcard?> = _currentCard
@@ -33,19 +52,13 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
             if (existingDecks.isEmpty()) {
                 repository.insertDeck(Deck(name = "Earth Science", category = "Science & Environment"))
                 repository.insertDeck(Deck(name = "Art", category = "Arts"))
-
-                val newDecks = repository.getAllDecks().first()
-                if (newDecks.isNotEmpty()) {
-                    repository.insertCard(Flashcard(deckId = newDecks[0].id, frontText = "Core", backText = "Lõi Trái Đất"))
-                }
             }
         }
     }
 
-
     fun startPractice(deckId: Int) {
         viewModelScope.launch {
-            val cards = repository.getCardsToReview(deckId).first()
+            val cards = repository.getCardsByDeck(deckId).first()
             reviewQueue = cards.toMutableList()
             _currentCard.value = reviewQueue.removeFirstOrNull()
         }
@@ -57,6 +70,7 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
             val updatedCard = SpacedRepetitionAlgorithm.calculateNextReview(card, quality)
             repository.updateCard(updatedCard)
 
+            // Nếu trả lời sai (quality = 0), cho thẻ vào cuối hàng đợi để học lại ngay
             if (quality == 0) {
                 reviewQueue.add(updatedCard)
             }
@@ -67,12 +81,7 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
 
     fun addNewCard(front: String, back: String, deckId: Int) {
         viewModelScope.launch {
-            val newCard = Flashcard(
-                deckId = deckId,
-                frontText = front,
-                backText = back
-            )
-            repository.insertCard(newCard)
+            repository.insertCard(Flashcard(deckId = deckId, frontText = front, backText = back))
         }
     }
 
@@ -86,5 +95,50 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
         viewModelScope.launch {
             repository.resetDeckProgress(deckId)
         }
+    }
+
+    fun importCsv(uri: Uri, contentResolver: ContentResolver, deckId: Int) {
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    val inputStream = contentResolver.openInputStream(uri)
+                    val reader = inputStream?.bufferedReader()
+                    reader?.lineSequence()?.forEach { line ->
+                        val parts = line.split(",")
+                        if (parts.size >= 2) {
+                            repository.insertCard(Flashcard(deckId = deckId, frontText = parts[0].trim(), backText = parts[1].trim()))
+                        }
+                    }
+                    inputStream?.close()
+                } catch (e: Exception) { e.printStackTrace() }
+            }
+        }
+    }
+
+    // Hàm lưu log khi hoàn thành phiên học
+    fun saveStudyLog(deckId: Int, count: Int) {
+        viewModelScope.launch {
+            repository.insertLog(StudyLog(deckId = deckId, cardsLearned = count))
+        }
+    }
+
+    // Logic tính Streak
+    private fun calculateStreak(studyDays: List<Long>): Int {
+        if (studyDays.isEmpty()) return 0
+        val today = System.currentTimeMillis() / 86400000
+        var streak = 0
+        var currentDay = today
+
+        // Nếu ngày gần nhất không phải hôm nay hoặc hôm qua thì streak đứt
+        if (studyDays.first() != today && studyDays.first() != today - 1) return 0
+        if (studyDays.first() == today - 1) currentDay = today - 1
+
+        for (day in studyDays) {
+            if (day == currentDay) {
+                streak++
+                currentDay--
+            } else if (day < currentDay) break
+        }
+        return streak
     }
 }
