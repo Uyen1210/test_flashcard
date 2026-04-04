@@ -1,6 +1,10 @@
 package com.example.test_flashcard
 
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.content.Context
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.speech.tts.TextToSpeech
 import androidx.activity.ComponentActivity
@@ -15,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.app.NotificationCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.work.*
 import com.example.test_flashcard.ui.theme.Test_flashcardTheme
@@ -32,20 +37,13 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // 1. Khởi tạo TTS
+        setupDailyReminder()
+
         tts = TextToSpeech(this) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.US
             }
         }
-
-        // 2. Thiết lập thông báo nhắc nhở hàng ngày
-        val workRequest = PeriodicWorkRequestBuilder<ReminderWorker>(24, TimeUnit.HOURS).build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "daily_reminder",
-            ExistingPeriodicWorkPolicy.KEEP,
-            workRequest
-        )
 
         setContent {
             Test_flashcardTheme {
@@ -54,7 +52,6 @@ class MainActivity : ComponentActivity() {
                     factory = PracticeViewModelFactory(application.repository)
                 )
 
-                // QUẢN LÝ TRẠNG THÁI
                 var currentScreen by remember { mutableStateOf("dashboard") }
                 var selectedDeckIdForImport by remember { mutableIntStateOf(-1) }
                 var activeDeckId by remember { mutableIntStateOf(-1) }
@@ -63,7 +60,6 @@ class MainActivity : ComponentActivity() {
                 val decksWithProgress by practiceViewModel.decksWithProgress.collectAsState(initial = emptyList())
                 val streak by practiceViewModel.streakCount.collectAsState()
 
-                // TRÌNH CHỌN FILE
                 val filePickerLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.GetContent()
                 ) { uri: Uri? ->
@@ -74,40 +70,30 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    color = MaterialTheme.colorScheme.background
-                ) {
+                Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
                     if (currentScreen == "dashboard") {
                         DashboardScreen(
                             decks = decksWithProgress,
-                            //streak = streak, // Hãy truyền biến này vào DashboardScreen để hiển thị 🔥
                             onDeckClick = { deckId ->
                                 activeDeckId = deckId
                                 practiceViewModel.startPractice(deckId)
                                 currentScreen = "practice"
                             },
-                            onAddCard = { front, back, deckId ->
-                                practiceViewModel.addNewCard(front, back, deckId)
-                            },
-                            onAddDeck = { name, cat ->
-                                practiceViewModel.addNewDeck(name, cat)
-                            },
-                            onResetDeck = { deckId ->
-                                practiceViewModel.resetAllCardsInDeck(deckId)
-                            },
-                            onImportClick = { deckId: Int ->
-                                selectedDeckIdForImport = deckId
+                            onAddCard = { f, b, id -> practiceViewModel.addNewCard(f, b, id) },
+                            onAddDeck = { n, c -> practiceViewModel.addNewDeck(n, c) },
+                            onResetDeck = { id -> practiceViewModel.resetAllCardsInDeck(id) },
+                            onImportClick = { id ->
+                                selectedDeckIdForImport = id
                                 filePickerLauncher.launch("text/*")
                             }
                         )
                     } else if (currentScreen == "practice") {
                         val card = currentCard
                         if (card == null) {
-                            // Khi hết bài: Tự động lưu log
                             LaunchedEffect(Unit) {
                                 if (activeDeckId != -1) {
                                     practiceViewModel.saveStudyLog(activeDeckId, 1)
+                                    sendCongratulationNotification("Bộ bài đã hoàn thành")
                                 }
                             }
                             ResultScreen(onBack = { currentScreen = "dashboard" })
@@ -115,9 +101,7 @@ class MainActivity : ComponentActivity() {
                             PracticeScreen(
                                 frontText = card.frontText,
                                 backText = card.backText,
-                                onAnswerSelected = { quality ->
-                                    practiceViewModel.onUserAnswered(quality)
-                                },
+                                onAnswerSelected = { q -> practiceViewModel.onUserAnswered(q) },
                                 onSpeak = { speakOut(card.frontText) },
                                 onExit = { currentScreen = "dashboard" }
                             )
@@ -126,6 +110,52 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    // Hàm tính toán và hẹn giờ 17:00
+    private fun setupDailyReminder() {
+        val calendar = Calendar.getInstance()
+        val now = calendar.timeInMillis
+
+        calendar.set(Calendar.HOUR_OF_DAY, 17)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+
+        if (calendar.timeInMillis <= now) {
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        val initialDelay = calendar.timeInMillis - now
+
+        val workRequest = PeriodicWorkRequestBuilder<ReminderWorker>(24, TimeUnit.HOURS)
+            .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "daily_reminder",
+            ExistingPeriodicWorkPolicy.UPDATE,
+            workRequest
+        )
+    }
+
+    private fun sendCongratulationNotification(deckName: String) {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "study_done_channel"
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "Hoàn thành", NotificationManager.IMPORTANCE_HIGH)
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setContentTitle("Tuyệt vời! 🎉")
+            .setContentText(deckName)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
     private fun speakOut(text: String) {
@@ -139,8 +169,6 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// Đảm bảo dấu đóng ngoặc này là của class MainActivity { ... }
-// }
 
 @Composable
 fun ResultScreen(onBack: () -> Unit) {
@@ -149,23 +177,14 @@ fun ResultScreen(onBack: () -> Unit) {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(
-            text = "🎉",
-            style = MaterialTheme.typography.displayLarge
-        )
+        Text(text = "🎉", style = MaterialTheme.typography.displayLarge)
         Spacer(modifier = Modifier.height(16.dp))
         Text(
             text = "Chúc mừng!\nBạn đã hoàn thành bài học.",
             style = MaterialTheme.typography.headlineMedium,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 24.dp)
+            textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))
-        Button(
-            onClick = onBack,
-            modifier = Modifier.fillMaxWidth(0.6f)
-        ) {
-            Text("Quay về Dashboard")
-        }
+        Button(onClick = onBack) { Text("Quay về Dashboard") }
     }
 }

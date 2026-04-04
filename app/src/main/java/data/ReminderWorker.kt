@@ -24,7 +24,7 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setContentTitle("Giờ vàng đã điểm! 🔥")
             .setContentText("Dành 5 phút ôn tập để duy trì Streak của bạn nào.")
-            .setSmallIcon(android.R.drawable.ic_dialog_info) // Bạn có thể thay icon app vào đây
+            .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setAutoCancel(true)
             .build()
 
