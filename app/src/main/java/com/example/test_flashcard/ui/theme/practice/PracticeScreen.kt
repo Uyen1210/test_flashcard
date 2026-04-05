@@ -1,4 +1,4 @@
-package com.example.test_flashcrad.ui.theme.practice
+package com.example.test_flashcard.ui.theme.practice
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween

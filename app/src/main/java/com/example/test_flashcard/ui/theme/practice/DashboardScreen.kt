@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreateNewFolder
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -22,7 +23,9 @@ import kotlin.collections.isNotEmpty
 @Composable
 fun DashboardScreen(
     decks: List<DeckWithProgress>,
+    totalLearned: Int,
     onDeckClick: (Int) -> Unit,
+    onManageCards: (Int, String) -> Unit, // Thêm callback này
     onAddCard: (String, String, Int) -> Unit,
     onAddDeck: (String, String) -> Unit,
     onResetDeck: (Int) -> Unit,
@@ -56,6 +59,30 @@ fun DashboardScreen(
                 .padding(padding)
                 .padding(16.dp)
         ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = "Tổng số thẻ đã thuộc",
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    Text(
+                        text = "$totalLearned 🎓",
+                        style = MaterialTheme.typography.displayMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+
             Text(text = "Các bộ bài của bạn:", style = MaterialTheme.typography.titleMedium)
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -75,7 +102,6 @@ fun DashboardScreen(
                                 .combinedClickable(
                                     onClick = { onDeckClick(deck.id) },
                                     onLongClick = {
-                                        // FIX 1: Kích hoạt logic Reset khi nhấn giữ
                                         deckIdToReset = deck.id
                                         showResetDialog = true
                                     }
@@ -83,7 +109,6 @@ fun DashboardScreen(
                             elevation = CardDefaults.cardElevation(4.dp)
                         ) {
                             Column(modifier = Modifier.padding(16.dp)) {
-                                // Dùng Row để đẩy nút Import sang bên phải
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -94,12 +119,18 @@ fun DashboardScreen(
                                         Text(text = deck.category, style = MaterialTheme.typography.bodyMedium)
                                     }
 
-                                    // FIX 2: Thêm nút Import CSV vào từng Card
-                                    OutlinedButton(
-                                        onClick = { onImportClick(deck.id) },
-                                        contentPadding = PaddingValues(horizontal = 8.dp)
-                                    ) {
-                                        Text("Import CSV", style = MaterialTheme.typography.labelSmall)
+                                    Row {
+                                        // Nút Quản lý thẻ
+                                        IconButton(onClick = { onManageCards(deck.id, deck.name) }) {
+                                            Icon(Icons.Default.List, contentDescription = "Quản lý thẻ", tint = MaterialTheme.colorScheme.primary)
+                                        }
+                                        
+                                        OutlinedButton(
+                                            onClick = { onImportClick(deck.id) },
+                                            contentPadding = PaddingValues(horizontal = 8.dp)
+                                        ) {
+                                            Text("Import CSV", style = MaterialTheme.typography.labelSmall)
+                                        }
                                     }
                                 }
 
@@ -124,7 +155,6 @@ fun DashboardScreen(
             }
         }
 
-        // --- CÁC DIALOG XỬ LÝ ---
         if (showResetDialog) {
             AlertDialog(
                 onDismissRequest = { showResetDialog = false },
