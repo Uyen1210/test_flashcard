@@ -18,14 +18,16 @@ import androidx.compose.ui.unit.dp
 import com.example.test_flashcard.data.DeckWithProgress
 import com.example.test_flashcard.ui.theme.practice.AddCardDialog
 import kotlin.collections.isNotEmpty
+import androidx.compose.ui.graphics.Color
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun DashboardScreen(
     decks: List<DeckWithProgress>,
     totalLearned: Int,
+    streak: Int,
     onDeckClick: (Int) -> Unit,
-    onManageCards: (Int, String) -> Unit, // Thêm callback này
+    onManageCards: (Int, String) -> Unit,
     onAddCard: (String, String, Int) -> Unit,
     onAddDeck: (String, String) -> Unit,
     onResetDeck: (Int) -> Unit,
@@ -39,7 +41,15 @@ fun DashboardScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Dashboard") },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Flashcard App")
+                        if (streak > 0) {
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Text("🔥 $streak", color = Color(0xFFFF5722), style = MaterialTheme.typography.titleMedium)
+                        }
+                    }
+                },
                 actions = {
                     IconButton(onClick = { showDeckDialog = true }) {
                         Icon(Icons.Default.CreateNewFolder, contentDescription = "Thêm bộ bài")
@@ -124,7 +134,7 @@ fun DashboardScreen(
                                         IconButton(onClick = { onManageCards(deck.id, deck.name) }) {
                                             Icon(Icons.Default.List, contentDescription = "Quản lý thẻ", tint = MaterialTheme.colorScheme.primary)
                                         }
-                                        
+
                                         OutlinedButton(
                                             onClick = { onImportClick(deck.id) },
                                             contentPadding = PaddingValues(horizontal = 8.dp)

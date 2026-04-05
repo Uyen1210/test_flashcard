@@ -32,6 +32,7 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import android.content.Intent
 import android.app.PendingIntent
+import com.example.test_flashcard.ui.theme.practice.*
 
 class MainActivity : ComponentActivity() {
     private var tts: TextToSpeech? = null
@@ -78,7 +79,8 @@ class MainActivity : ComponentActivity() {
 
         val currentCard by practiceViewModel.currentCard.collectAsState()
         val decksWithProgress by practiceViewModel.decksWithProgress.collectAsState(initial = emptyList())
-        val totalLearned by practiceViewModel.totalLearnedCount.collectAsState()
+        val streak by practiceViewModel.streakCount.collectAsState()
+        val totalLearned = decksWithProgress.sumOf { it.learnedCards }
 
         val filePickerLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.GetContent()
@@ -99,6 +101,7 @@ class MainActivity : ComponentActivity() {
                     DashboardScreen(
                         decks = decksWithProgress,
                         totalLearned = totalLearned,
+                        streak = streak,
                         onDeckClick = { deckId ->
                             activeDeckId = deckId
                             practiceViewModel.startPractice(deckId)
@@ -198,10 +201,9 @@ class MainActivity : ComponentActivity() {
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
-        // Tạo PendingIntent (chiếc chìa khóa)
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE // Bắt buộc từ Android 12+
+            PendingIntent.FLAG_IMMUTABLE
         )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
