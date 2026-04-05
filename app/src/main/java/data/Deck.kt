@@ -14,3 +14,15 @@ data class Deck(
     val category: String,           // Danh mục (VD: Science & Environment)
     val description: String = ""    // Mô tả thêm
 )
+
+data class DeckWithProgress(
+    val deck: Deck,
+    val totalCards: Int,
+    val learnedCards: Int
+) {
+    val progress: Float
+        get() = if (totalCards > 0) learnedCards.toFloat() / totalCards else 0f
+
+    val progressText: String
+        get() = "${(progress * 100).toInt()}%"
+}

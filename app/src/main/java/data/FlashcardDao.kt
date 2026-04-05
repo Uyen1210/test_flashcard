@@ -4,24 +4,33 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.Query
 import androidx.room.Update
+import androidx.room.Delete
 import kotlinx.coroutines.flow.Flow
+import androidx.room.*
 
 @Dao
 interface FlashcardDao {
-    @Insert
-    suspend fun insertFlashcard(flashcard: Flashcard)
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertCard(card: Flashcard)
 
     @Update
-    suspend fun updateFlashcard(flashcard: Flashcard)
+    suspend fun updateCard(card: Flashcard)
 
-    // Lấy tất cả các thẻ CẦN ÔN TẬP hôm nay (nextReviewDate <= thời gian hiện tại)
-    @Query("SELECT * FROM flashcards WHERE deckId = :deckId AND nextReviewDate <= :currentTime")
-    fun getCardsToReview(deckId: Int, currentTime: Long): Flow<List<Flashcard>>
-    // Lấy tất cả bộ bài hiển thị ra màn hình
-    @Query("SELECT * FROM decks")
-    fun getAllDecks(): Flow<List<Deck>>
+    @Delete
+    suspend fun deleteCard(card: Flashcard)
 
-    // Tạo bộ bài mới
-    @Insert
-    suspend fun insertDeck(deck: Deck)
+    @Query("SELECT * FROM flashcards WHERE deckId = :deckId")
+    fun getCardsByDeck(deckId: Int): Flow<List<Flashcard>>
+
+    @Query("SELECT COUNT(*) FROM flashcards WHERE deckId = :deckId")
+    fun getTotalCount(deckId: Int): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM flashcards WHERE deckId = :deckId AND repetitions > 0")
+    fun getLearnedCount(deckId: Int): Flow<Int>
+
+    @Query("SELECT COUNT(*) FROM flashcards WHERE repetitions > 0")
+    fun getTotalLearnedAllTime(): Flow<Int>
+
+    @Query("UPDATE flashcards SET repetitions = 0, interval = 1, easeFactor = 2.5, nextReviewDate = 0 WHERE deckId = :deckId")
+    suspend fun resetDeckProgress(deckId: Int)
 }
