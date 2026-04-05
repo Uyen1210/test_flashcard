@@ -30,6 +30,8 @@ import com.example.test_flashcard.ui.theme.practice.*
 import com.example.test_flashcard.worker.ReminderWorker
 import java.util.*
 import java.util.concurrent.TimeUnit
+import android.content.Intent
+import android.app.PendingIntent
 
 class MainActivity : ComponentActivity() {
     private var tts: TextToSpeech? = null
@@ -70,7 +72,7 @@ class MainActivity : ComponentActivity() {
         var currentScreen by remember { mutableStateOf("dashboard") }
         var selectedDeckIdForImport by remember { mutableIntStateOf(-1) }
         var activeDeckId by remember { mutableIntStateOf(-1) }
-        
+
         var manageDeckId by remember { mutableIntStateOf(-1) }
         var manageDeckName by remember { mutableStateOf("") }
 
@@ -165,10 +167,26 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun setupDailyReminder() {
-        val workRequest = PeriodicWorkRequestBuilder<ReminderWorker>(24, TimeUnit.HOURS).build()
+        val calendar = Calendar.getInstance()
+        val now = calendar.timeInMillis
+
+        calendar.set(Calendar.HOUR_OF_DAY, 19)
+        calendar.set(Calendar.MINUTE, 0)
+        calendar.set(Calendar.SECOND, 0)
+
+        if (calendar.timeInMillis <= now) {
+            calendar.add(Calendar.DAY_OF_YEAR, 1)
+        }
+
+        val initialDelay = calendar.timeInMillis - now
+
+        val workRequest = PeriodicWorkRequestBuilder<ReminderWorker>(24, TimeUnit.HOURS)
+            .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
+            .build()
+
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "daily_reminder",
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             workRequest
         )
     }
@@ -176,6 +194,15 @@ class MainActivity : ComponentActivity() {
     private fun sendCongratulationNotification(message: String) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "study_done_channel"
+
+        val intent = Intent(this, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        }
+        // Tạo PendingIntent (chiếc chìa khóa)
+        val pendingIntent = PendingIntent.getActivity(
+            this, 0, intent,
+            PendingIntent.FLAG_IMMUTABLE // Bắt buộc từ Android 12+
+        )
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(channelId, "Hoàn thành bài học", NotificationManager.IMPORTANCE_HIGH)
@@ -187,6 +214,7 @@ class MainActivity : ComponentActivity() {
             .setContentTitle("Chúc mừng! 🎉")
             .setContentText(message)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
 
