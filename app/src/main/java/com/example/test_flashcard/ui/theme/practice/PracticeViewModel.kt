@@ -43,7 +43,6 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
 
     private var reviewQueue = mutableListOf<Flashcard>()
 
-    // Dùng Flow để lấy danh sách thẻ cho màn hình Quản lý
     fun getCardsByDeck(deckId: Int): Flow<List<Flashcard>> = repository.getCardsByDeck(deckId)
 
     fun updateCardContent(card: Flashcard, newFront: String, newBack: String) {
@@ -55,6 +54,13 @@ class PracticeViewModel(private val repository: FlashcardRepository) : ViewModel
     fun deleteCard(card: Flashcard) {
         viewModelScope.launch {
             repository.deleteCard(card)
+        }
+    }
+
+    // Hàm xóa bộ bài
+    fun deleteDeck(deck: Deck) {
+        viewModelScope.launch {
+            repository.deleteDeck(deck)
         }
     }
 

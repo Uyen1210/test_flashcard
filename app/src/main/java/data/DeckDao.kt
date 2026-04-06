@@ -10,4 +10,11 @@ interface DeckDao {
 
     @Insert
     suspend fun insertDeck(deck: Deck)
+
+    @Delete
+    suspend fun deleteDeck(deck: Deck)
+
+    // Xóa tất cả thẻ bài thuộc về bộ bài này khi xóa bộ bài
+    @Query("DELETE FROM flashcards WHERE deckId = :deckId")
+    suspend fun deleteCardsByDeckId(deckId: Int)
 }

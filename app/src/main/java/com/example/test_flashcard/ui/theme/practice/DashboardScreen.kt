@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CreateNewFolder
 import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -19,6 +20,7 @@ import com.example.test_flashcard.data.DeckWithProgress
 import com.example.test_flashcard.ui.theme.practice.AddCardDialog
 import kotlin.collections.isNotEmpty
 import androidx.compose.ui.graphics.Color
+import com.example.test_flashcard.data.Deck
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -30,13 +32,15 @@ fun DashboardScreen(
     onManageCards: (Int, String) -> Unit,
     onAddCard: (String, String, Int) -> Unit,
     onAddDeck: (String, String) -> Unit,
+    onDeleteDeck: (Deck) -> Unit, // Thêm callback xóa bộ bài
     onResetDeck: (Int) -> Unit,
     onImportClick: (Int) -> Unit
 ) {
     var showCardDialog by remember { mutableStateOf(false) }
     var showDeckDialog by remember { mutableStateOf(false) }
     var showResetDialog by remember { mutableStateOf(false) }
-    var deckIdToReset by remember { mutableIntStateOf(-1) }
+    var showDeleteDialog by remember { mutableStateOf(false) } // State cho dialog xóa
+    var deckToProcess by remember { mutableStateOf<Deck?>(null) }
 
     Scaffold(
         topBar = {
@@ -112,7 +116,7 @@ fun DashboardScreen(
                                 .combinedClickable(
                                     onClick = { onDeckClick(deck.id) },
                                     onLongClick = {
-                                        deckIdToReset = deck.id
+                                        deckToProcess = deck
                                         showResetDialog = true
                                     }
                                 ),
@@ -129,10 +133,18 @@ fun DashboardScreen(
                                         Text(text = deck.category, style = MaterialTheme.typography.bodyMedium)
                                     }
 
-                                    Row {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
                                         // Nút Quản lý thẻ
                                         IconButton(onClick = { onManageCards(deck.id, deck.name) }) {
                                             Icon(Icons.Default.List, contentDescription = "Quản lý thẻ", tint = MaterialTheme.colorScheme.primary)
+                                        }
+
+                                        // Nút Xóa bộ bài
+                                        IconButton(onClick = { 
+                                            deckToProcess = deck
+                                            showDeleteDialog = true 
+                                        }) {
+                                            Icon(Icons.Default.Delete, contentDescription = "Xóa bộ bài", tint = MaterialTheme.colorScheme.error)
                                         }
 
                                         OutlinedButton(
@@ -165,19 +177,41 @@ fun DashboardScreen(
             }
         }
 
+        // Dialog Reset Tiến độ
         if (showResetDialog) {
             AlertDialog(
                 onDismissRequest = { showResetDialog = false },
                 title = { Text("Học lại từ đầu?") },
-                text = { Text("Bạn có muốn xóa toàn bộ tiến độ của bộ bài này không?") },
+                text = { Text("Bạn có muốn xóa toàn bộ tiến độ của bộ bài '${deckToProcess?.name}' không?") },
                 confirmButton = {
                     Button(onClick = {
-                        onResetDeck(deckIdToReset)
+                        deckToProcess?.let { onResetDeck(it.id) }
                         showResetDialog = false
                     }) { Text("Xác nhận") }
                 },
                 dismissButton = {
                     TextButton(onClick = { showResetDialog = false }) { Text("Hủy") }
+                }
+            )
+        }
+
+        // Dialog Xóa Bộ Bài
+        if (showDeleteDialog) {
+            AlertDialog(
+                onDismissRequest = { showDeleteDialog = false },
+                title = { Text("Xóa bộ bài?") },
+                text = { Text("Hành động này sẽ xóa vĩnh viễn bộ bài '${deckToProcess?.name}' và tất cả các thẻ bên trong. Bạn có chắc chắn không?") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            deckToProcess?.let { onDeleteDeck(it) }
+                            showDeleteDialog = false
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Xóa vĩnh viễn") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showDeleteDialog = false }) { Text("Hủy") }
                 }
             )
         }

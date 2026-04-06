@@ -32,7 +32,6 @@ import java.util.*
 import java.util.concurrent.TimeUnit
 import android.content.Intent
 import android.app.PendingIntent
-import com.example.test_flashcard.ui.theme.practice.*
 
 class MainActivity : ComponentActivity() {
     private var tts: TextToSpeech? = null
@@ -41,7 +40,7 @@ class MainActivity : ComponentActivity() {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         if (isGranted) {
-            setupDailyReminder()
+            setupDailyReminder(this)
         }
     }
 
@@ -58,101 +57,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Test_flashcardTheme {
-                MainScreenContent()
-            }
-        }
-    }
-
-    @Composable
-    fun MainScreenContent() {
-        val application = LocalContext.current.applicationContext as MyApplication
-        val practiceViewModel: PracticeViewModel = viewModel(
-            factory = PracticeViewModelFactory(application.repository)
-        )
-
-        var currentScreen by remember { mutableStateOf("dashboard") }
-        var selectedDeckIdForImport by remember { mutableIntStateOf(-1) }
-        var activeDeckId by remember { mutableIntStateOf(-1) }
-
-        var manageDeckId by remember { mutableIntStateOf(-1) }
-        var manageDeckName by remember { mutableStateOf("") }
-
-        val currentCard by practiceViewModel.currentCard.collectAsState()
-        val decksWithProgress by practiceViewModel.decksWithProgress.collectAsState(initial = emptyList())
-        val streak by practiceViewModel.streakCount.collectAsState()
-        val totalLearned = decksWithProgress.sumOf { it.learnedCards }
-
-        val filePickerLauncher = rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent()
-        ) { uri: Uri? ->
-            uri?.let {
-                if (selectedDeckIdForImport != -1) {
-                    practiceViewModel.importCsv(it, contentResolver, selectedDeckIdForImport)
-                }
-            }
-        }
-
-        Surface(
-            modifier = Modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background
-        ) {
-            when (currentScreen) {
-                "dashboard" -> {
-                    DashboardScreen(
-                        decks = decksWithProgress,
-                        totalLearned = totalLearned,
-                        streak = streak,
-                        onDeckClick = { deckId ->
-                            activeDeckId = deckId
-                            practiceViewModel.startPractice(deckId)
-                            currentScreen = "practice"
-                        },
-                        onManageCards = { deckId, deckName ->
-                            manageDeckId = deckId
-                            manageDeckName = deckName
-                            currentScreen = "manage_cards"
-                        },
-                        onAddCard = { f, b, id -> practiceViewModel.addNewCard(f, b, id) },
-                        onAddDeck = { n, c -> practiceViewModel.addNewDeck(n, c) },
-                        onResetDeck = { id -> practiceViewModel.resetAllCardsInDeck(id) },
-                        onImportClick = { id ->
-                            selectedDeckIdForImport = id
-                            filePickerLauncher.launch("text/*")
-                        }
-                    )
-                }
-                "practice" -> {
-                    val card = currentCard
-                    if (card == null) {
-                        LaunchedEffect(Unit) {
-                            if (activeDeckId != -1) {
-                                practiceViewModel.saveStudyLog(activeDeckId, 1)
-                                val finishedDeck = decksWithProgress.find { it.deck.id == activeDeckId }
-                                val deckName = finishedDeck?.deck?.name ?: "Bộ bài"
-                                sendCongratulationNotification("Bạn đã hoàn thành bộ bài: $deckName")
-                            }
-                        }
-                        ResultScreen(onBack = { currentScreen = "dashboard" })
-                    } else {
-                        PracticeScreen(
-                            frontText = card.frontText,
-                            backText = card.backText,
-                            onAnswerSelected = { q -> practiceViewModel.onUserAnswered(q) },
-                            onSpeak = { speakOut(card.frontText) },
-                            onExit = { currentScreen = "dashboard" }
-                        )
-                    }
-                }
-                "manage_cards" -> {
-                    val cardsInDeck by practiceViewModel.getCardsByDeck(manageDeckId).collectAsState(initial = emptyList())
-                    ManageCardsScreen(
-                        deckName = manageDeckName,
-                        cards = cardsInDeck,
-                        onDeleteCard = { card -> practiceViewModel.deleteCard(card) },
-                        onUpdateCard = { card, f, b -> practiceViewModel.updateCardContent(card, f, b) },
-                        onBack = { currentScreen = "dashboard" }
-                    )
-                }
+                MainScreenContent(
+                    onSpeak = { text -> speakOut(text) },
+                    onSendNotification = { msg -> sendCongratulationNotification(msg) }
+                )
             }
         }
     }
@@ -162,42 +70,16 @@ class MainActivity : ComponentActivity() {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
             } else {
-                setupDailyReminder()
+                setupDailyReminder(this)
             }
         } else {
-            setupDailyReminder()
+            setupDailyReminder(this)
         }
-    }
-
-    private fun setupDailyReminder() {
-        val calendar = Calendar.getInstance()
-        val now = calendar.timeInMillis
-
-        calendar.set(Calendar.HOUR_OF_DAY, 19)
-        calendar.set(Calendar.MINUTE, 0)
-        calendar.set(Calendar.SECOND, 0)
-
-        if (calendar.timeInMillis <= now) {
-            calendar.add(Calendar.DAY_OF_YEAR, 1)
-        }
-
-        val initialDelay = calendar.timeInMillis - now
-
-        val workRequest = PeriodicWorkRequestBuilder<ReminderWorker>(24, TimeUnit.HOURS)
-            .setInitialDelay(initialDelay, TimeUnit.MILLISECONDS)
-            .build()
-
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
-            "daily_reminder",
-            ExistingPeriodicWorkPolicy.UPDATE,
-            workRequest
-        )
     }
 
     private fun sendCongratulationNotification(message: String) {
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "study_done_channel"
-
         val intent = Intent(this, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -205,12 +87,10 @@ class MainActivity : ComponentActivity() {
             this, 0, intent,
             PendingIntent.FLAG_IMMUTABLE
         )
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(channelId, "Hoàn thành bài học", NotificationManager.IMPORTANCE_HIGH)
             notificationManager.createNotificationChannel(channel)
         }
-
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle("Chúc mừng! 🎉")
@@ -219,7 +99,6 @@ class MainActivity : ComponentActivity() {
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()
-
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 
@@ -235,7 +114,122 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun ResultScreen(onBack: () -> Unit) {
+fun MainScreenContent(
+    onSpeak: (String) -> Unit,
+    onSendNotification: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val application = context.applicationContext as MyApplication
+    val practiceViewModel: PracticeViewModel = viewModel(
+        factory = PracticeViewModelFactory(application.repository)
+    )
+
+    var currentScreen by remember { mutableStateOf("dashboard") }
+    var selectedDeckIdForImport by remember { mutableIntStateOf(-1) }
+    var activeDeckId by remember { mutableIntStateOf(-1) }
+
+    var manageDeckId by remember { mutableIntStateOf(-1) }
+    var manageDeckName by remember { mutableStateOf("") }
+
+    val currentCard by practiceViewModel.currentCard.collectAsState()
+    val decksWithProgress by practiceViewModel.decksWithProgress.collectAsState(initial = emptyList())
+    val streak by practiceViewModel.streakCount.collectAsState()
+    val totalLearned = decksWithProgress.sumOf { it.learnedCards }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            if (selectedDeckIdForImport != -1) {
+                practiceViewModel.importCsv(it, context.contentResolver, selectedDeckIdForImport)
+            }
+        }
+    }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = MaterialTheme.colorScheme.background
+    ) {
+        when (currentScreen) {
+            "dashboard" -> {
+                DashboardScreen(
+                    decks = decksWithProgress,
+                    totalLearned = totalLearned,
+                    streak = streak,
+                    onDeckClick = { deckId ->
+                        activeDeckId = deckId
+                        practiceViewModel.startPractice(deckId)
+                        currentScreen = "practice"
+                    },
+                    onManageCards = { deckId, deckName ->
+                        manageDeckId = deckId
+                        manageDeckName = deckName
+                        currentScreen = "manage_cards"
+                    },
+                    onAddCard = { f, b, id -> practiceViewModel.addNewCard(f, b, id) },
+                    onAddDeck = { n, c -> practiceViewModel.addNewDeck(n, c) },
+                    onResetDeck = { id -> practiceViewModel.resetAllCardsInDeck(id) },
+                    onImportClick = { id ->
+                        selectedDeckIdForImport = id
+                        filePickerLauncher.launch("text/*")
+                    },
+                    onDeleteDeck = { deck -> practiceViewModel.deleteDeck(deck) }
+                )
+            }
+            "practice" -> {
+                val card = currentCard
+                if (card == null) {
+                    LaunchedEffect(Unit) {
+                        if (activeDeckId != -1) {
+                            practiceViewModel.saveStudyLog(activeDeckId, 1)
+                            val finishedDeck = decksWithProgress.find { it.deck.id == activeDeckId }
+                            val deckName = finishedDeck?.deck?.name ?: "Bộ bài"
+                            onSendNotification("Bạn đã hoàn thành bộ bài: $deckName")
+                        }
+                    }
+                    ResultScreen(
+                        onBack = { currentScreen = "dashboard" },
+                        onRetry = {
+                            if (activeDeckId != -1) {
+                                practiceViewModel.startPractice(activeDeckId)
+                            }
+                        }
+                    )
+                } else {
+                    PracticeScreen(
+                        frontText = card.frontText,
+                        backText = card.backText,
+                        onAnswerSelected = { q -> practiceViewModel.onUserAnswered(q) },
+                        onSpeak = { onSpeak(card.frontText) },
+                        onExit = { currentScreen = "dashboard" }
+                    )
+                }
+            }
+            "manage_cards" -> {
+                val cardsInDeck by practiceViewModel.getCardsByDeck(manageDeckId).collectAsState(initial = emptyList())
+                ManageCardsScreen(
+                    deckName = manageDeckName,
+                    cards = cardsInDeck,
+                    onDeleteCard = { card -> practiceViewModel.deleteCard(card) },
+                    onUpdateCard = { card, f, b -> practiceViewModel.updateCardContent(card, f, b) },
+                    onBack = { currentScreen = "dashboard" }
+                )
+            }
+        }
+    }
+}
+
+fun setupDailyReminder(context: Context) {
+    val workRequest = PeriodicWorkRequestBuilder<ReminderWorker>(24, TimeUnit.HOURS).build()
+    WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+        "daily_reminder",
+        ExistingPeriodicWorkPolicy.UPDATE,
+        workRequest
+    )
+}
+
+@Composable
+fun ResultScreen(onBack: () -> Unit, onRetry: () -> Unit) {
     Column(
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.Center,
@@ -249,6 +243,21 @@ fun ResultScreen(onBack: () -> Unit) {
             textAlign = TextAlign.Center
         )
         Spacer(modifier = Modifier.height(32.dp))
-        Button(onClick = onBack) { Text("Quay về Dashboard") }
+        
+        Button(
+            onClick = onRetry,
+            modifier = Modifier.fillMaxWidth(0.7f)
+        ) {
+            Text("Học lại bộ bài này")
+        }
+        
+        Spacer(modifier = Modifier.height(8.dp))
+        
+        OutlinedButton(
+            onClick = onBack,
+            modifier = Modifier.fillMaxWidth(0.7f)
+        ) {
+            Text("Quay về Dashboard")
+        }
     }
 }

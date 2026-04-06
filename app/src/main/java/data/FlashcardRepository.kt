@@ -21,6 +21,12 @@ class FlashcardRepository(
     suspend fun resetDeckProgress(deckId: Int) = flashcardDao.resetDeckProgress(deckId)
 
     suspend fun insertDeck(deck: Deck) = deckDao.insertDeck(deck)
+    suspend fun deleteDeck(deck: Deck) {
+        // Xóa tất cả thẻ bài thuộc về bộ bài này trước
+        deckDao.deleteCardsByDeckId(deck.id)
+        // Sau đó mới xóa bộ bài
+        deckDao.deleteDeck(deck)
+    }
 
     suspend fun insertLog(log: StudyLog) = studyLogDao.insertLog(log)
     fun getAllLogs(): Flow<List<StudyLog>> = studyLogDao.getAllLogs()
